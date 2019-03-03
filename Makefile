@@ -1,5 +1,5 @@
 build:
-	docker build . -t kcsv
+	docker-compose build
 
 test: build
-	docker run kcsv ./gradlew test
+	docker-compose run --rm tests

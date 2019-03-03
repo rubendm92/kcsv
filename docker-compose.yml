@@ -1,0 +1,18 @@
+version: '3.4'
+
+services:
+  tests:
+    build:
+      context: .
+    environment:
+      - STATIC_URL=http://static_web:8000
+    depends_on:
+      - static_web
+    command: './gradlew test'
+  static_web:
+    image: python:3.7.1-alpine3.8
+    ports:
+      - 9999:8000
+    volumes:
+      - ./src/test/resources:/tmp
+    command: ["python", "-m", "http.server", "--directory", "tmp"]

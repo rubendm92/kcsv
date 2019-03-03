@@ -12,6 +12,7 @@ class CsvReaderSpec: StringSpec({
 
         val firstLine = csv.content.first()
 
+        csv.headers shouldBe emptyList()
         firstLine[0] shouldBe "Hello"
         firstLine[1] shouldBe "World"
     }
@@ -43,7 +44,7 @@ class CsvReaderSpec: StringSpec({
     }
 
     "can read from a url" {
-        val csv = CsvReader.from(URL("http://localhost:8080/example_with_header.csv")).withHeaders().read()
+        val csv = CsvReader.from(csvUrl("example_with_header.csv")).withHeaders().read()
 
         val firstLine = csv.content.first()
         firstLine[0] shouldBe "Hello"
@@ -51,12 +52,16 @@ class CsvReaderSpec: StringSpec({
     }
 
     "can read from a url a zipped file" {
-        val csv = CsvReader.from(URL("http://localhost:8080/example_with_header.zip")).withHeaders().zipped().read()
+        val csv = CsvReader.from(csvUrl("example_with_header.zip")).withHeaders().zipped().read()
 
         val firstLine = csv.content.first()
         firstLine[0] shouldBe "Hello"
         firstLine[1] shouldBe "World"
     }
 })
+
+val staticUrl: String = System.getenv().getOrDefault("STATIC_URL", "http://localhost:9999")
+
+private fun csvUrl(name: String) = URL("$staticUrl/$name")
 
 private fun csvFile(name: String) = Paths.get("src/test/resources/$name")
