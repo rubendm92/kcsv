@@ -9,19 +9,30 @@ object CsvReader {
     fun from(path: Path): CsvFileReader = CsvFileReader.csvFor(path)
 }
 
-class CsvFileReader private constructor(private val path: Path, private val withHeaders: Boolean, private val zipped: Boolean) {
+class CsvFileReader private constructor(private val file: File, private val withHeaders: Boolean) {
     companion object {
-        fun csvFor(path: Path) = CsvFileReader(path, withHeaders = false, zipped = false)
+        fun csvFor(path: Path) = CsvFileReader(RegularFile(path), withHeaders = false)
     }
 
-    fun withHeaders() = CsvFileReader(path, withHeaders = true, zipped = zipped)
+    fun withHeaders() = CsvFileReader(file, withHeaders = true)
 
-    fun zipped() = CsvFileReader(path, withHeaders = withHeaders, zipped = true)
+    fun zipped() = CsvFileReader(me.rubendm.kcsv.ZipFile(file), withHeaders = withHeaders)
 
-    fun read(): Csv = when {
-        zipped -> ZippedCsvFile(path) { if (withHeaders) CsvFileWithHeaders(CsvStream(it)) else CsvStream(it) }
-        withHeaders -> CsvFileWithHeaders(CsvFile(path))
-        else -> CsvFile(path)
+    fun read(): Csv = if (withHeaders) CsvFileWithHeaders(CsvFile(file)) else CsvFile(file)
+}
+
+sealed class File(val path: Path) {
+    abstract val stream: InputStream
+}
+
+class RegularFile(path: Path): File(path) {
+    override val stream: InputStream get() = path.toFile().inputStream()
+}
+
+class ZipFile(file: File): File(file.path) {
+    override val stream: InputStream get() {
+        val zipFile = ZipFile(path.toFile())
+        return zipFile.entries().nextElement().let { zipFile.getInputStream(it) }
     }
 }
 
@@ -30,34 +41,14 @@ interface Csv {
     val content: Sequence<CsvLine>
 }
 
-private class CsvStream(stream: InputStream): Csv {
+private class CsvFile(private val file: File): Csv {
     override val headers: List<String> = listOf()
-    override val content: Sequence<CsvLine> = Lines(stream)
+    override val content: Sequence<CsvLine> get() = Lines(file.stream)
 }
-
-private class CsvFile(private val path: Path): Csv by CsvStream(path.toFile().inputStream())
 
 private class CsvFileWithHeaders(csv: Csv): Csv {
-    private var temporalHeaders: List<String> = listOf()
-    override val headers: List<String> get() = temporalHeaders
-    override val content: Sequence<CsvLine> = csv.content.mapNotNull {
-        // Ugly trick because the content can only be read once
-        if (temporalHeaders.isEmpty()) {
-            temporalHeaders = it.toList()
-            null
-        } else {
-            it.copy(headers = headers)
-        }
-    }
-}
-
-class ZippedCsvFile(private val zipped: Path, private val f: (InputStream) -> Csv) : Csv by f(streamOf(zipped)) {
-    companion object {
-        private fun streamOf(path: Path): InputStream {
-            val zipFile = ZipFile(path.toFile())
-            return zipFile.entries().nextElement().let { zipFile.getInputStream(it) }
-        }
-    }
+    override val headers: List<String> = csv.content.first().toList()
+    override val content: Sequence<CsvLine> = csv.content.drop(1).map { it.copy(headers = headers) }
 }
 
 data class CsvLine(private val content: List<String>, private val headers: List<String> = listOf()) {
